@@ -1,13 +1,25 @@
 import React, { createContext, useContext, useState } from 'react';
-import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TextView } from '@/components/ui/textview';
 import { useColors } from '@/hooks/useColors';
 
 type AlertType = 'success' | 'error' | 'info' | 'warning';
 
+// Define a button interface for alerts
+interface AlertButton {
+  text: string;
+  onPress: () => void;
+  type?: 'default' | 'cancel' | 'destructive';
+}
+
 interface AlertContextType {
   showAlert: (message: string, type?: AlertType, duration?: number) => void;
+  showConfirmAlert: (
+    message: string,
+    buttons: AlertButton[],
+    type?: AlertType
+  ) => void;
 }
 
 const AlertContext = createContext<AlertContextType | undefined>(undefined);
@@ -23,10 +35,11 @@ export const useAlert = () => {
 interface AlertProps {
   message: string;
   type: AlertType;
+  buttons?: AlertButton[];
   onClose: () => void;
 }
 
-const Alert: React.FC<AlertProps> = ({ message, type, onClose }) => {
+const Alert: React.FC<AlertProps> = ({ message, type, buttons, onClose }) => {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
@@ -44,6 +57,18 @@ const Alert: React.FC<AlertProps> = ({ message, type, onClose }) => {
     }
   };
 
+  const getButtonColor = (buttonType?: 'default' | 'cancel' | 'destructive') => {
+    switch (buttonType) {
+      case 'destructive':
+        return '#FF3B30';
+      case 'cancel':
+        return '#8E8E93';
+      case 'default':
+      default:
+        return '#FFFFFF';
+    }
+  };
+
   return (
     <View
       style={[
@@ -54,11 +79,34 @@ const Alert: React.FC<AlertProps> = ({ message, type, onClose }) => {
         }
       ]}
     >
-      <TextView
-        style={styles.alertText}
-      >
+      <TextView style={styles.alertText}>
         {message}
       </TextView>
+
+      {buttons && buttons.length > 0 && (
+        <View style={styles.buttonContainer}>
+          {buttons.map((button, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.button,
+                index > 0 && styles.buttonMargin
+              ]}
+              onPress={() => {
+                button.onPress();
+                onClose();
+              }}
+            >
+              <TextView style={[
+                styles.buttonText,
+                { color: getButtonColor(button.type) }
+              ]}>
+                {button.text}
+              </TextView>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
@@ -68,10 +116,14 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     visible: boolean;
     message: string;
     type: AlertType;
+    buttons?: AlertButton[];
+    autoHide: boolean;
   }>({
     visible: false,
     message: '',
     type: 'info',
+    buttons: undefined,
+    autoHide: true,
   });
 
   const [animation] = useState(new Animated.Value(0));
@@ -81,6 +133,8 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       visible: true,
       message,
       type,
+      buttons: undefined,
+      autoHide: true,
     });
 
     // Animate in
@@ -92,14 +146,29 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Auto hide after duration
     setTimeout(() => {
-      Animated.timing(animation, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        setAlertState(prev => ({ ...prev, visible: false }));
-      });
+      hideAlert();
     }, duration);
+  };
+
+  const showConfirmAlert = (
+    message: string,
+    buttons: AlertButton[],
+    type: AlertType = 'warning'
+  ) => {
+    setAlertState({
+      visible: true,
+      message,
+      type,
+      buttons,
+      autoHide: false,
+    });
+
+    // Animate in
+    Animated.timing(animation, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
   const hideAlert = () => {
@@ -113,7 +182,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   return (
-    <AlertContext.Provider value={{ showAlert }}>
+    <AlertContext.Provider value={{ showAlert, showConfirmAlert }}>
       {children}
       {alertState.visible && (
         <Animated.View
@@ -137,6 +206,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           <Alert
             message={alertState.message}
             type={alertState.type}
+            buttons={alertState.buttons}
             onClose={hideAlert}
           />
         </Animated.View>
@@ -160,6 +230,25 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'PoppinsMedium',
     textAlign: 'center',
+    marginBottom: 10,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  button: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  buttonMargin: {
+    marginLeft: 10,
+  },
+  buttonText: {
+    fontFamily: 'PoppinsMedium',
+    fontSize: 14,
   }
 });
 
@@ -168,11 +257,17 @@ export const AlertComponent: React.FC<{
   message: string;
   type?: AlertType;
   visible: boolean;
+  buttons?: AlertButton[];
   onClose: () => void;
-}> = ({ message, type = 'info', visible, onClose }) => {
+}> = ({ message, type = 'info', visible, buttons, onClose }) => {
   if (!visible) return null;
 
   return (
-    <Alert message={message} type={type} onClose={onClose} />
+    <Alert
+      message={message}
+      type={type}
+      buttons={buttons}
+      onClose={onClose}
+    />
   );
 };
