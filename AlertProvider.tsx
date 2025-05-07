@@ -20,6 +20,11 @@ interface AlertContextType {
     buttons: AlertButton[],
     type?: AlertType
   ) => void;
+  showDeleteConfirmation: (
+    message: string,
+    onConfirm: () => void,
+    onCancel?: () => void
+  ) => void;
 }
 
 const AlertContext = createContext<AlertContextType | undefined>(undefined);
@@ -48,24 +53,25 @@ const Alert: React.FC<AlertProps> = ({ message, type, buttons, onClose }) => {
       case 'success':
         return colors.primary;
       case 'error':
-        return '#FF3B30';
+        return colors.error;
       case 'warning':
-        return '#FF9500';
+        return colors.warning;
       case 'info':
+        return colors.info;
       default:
-        return '#007AFF';
+        return colors.primary;
     }
   };
 
   const getButtonColor = (buttonType?: 'default' | 'cancel' | 'destructive') => {
     switch (buttonType) {
       case 'destructive':
-        return '#FF3B30';
+        return colors.error;
       case 'cancel':
-        return '#8E8E93';
+        return colors.warning;
       case 'default':
       default:
-        return '#FFFFFF';
+        return colors.primary;
     }
   };
 
@@ -79,35 +85,42 @@ const Alert: React.FC<AlertProps> = ({ message, type, buttons, onClose }) => {
         }
       ]}
     >
-      <TextView style={styles.alertText}>
+      <TextView
+        style={[
+          styles.alertText,
+          buttons && buttons.length > 0 ? { textAlign: 'left' } : null,
+        ]}
+      >
         {message}
       </TextView>
 
-      {buttons && buttons.length > 0 && (
-        <View style={styles.buttonContainer}>
-          {buttons.map((button, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.button,
-                index > 0 && styles.buttonMargin
-              ]}
-              onPress={() => {
-                button.onPress();
-                onClose();
-              }}
-            >
-              <TextView style={[
-                styles.buttonText,
-                { color: getButtonColor(button.type) }
-              ]}>
-                {button.text}
-              </TextView>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
+      {
+        buttons && buttons.length > 0 && (
+          <View style={styles.buttonContainer}>
+            {buttons.map((button, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.button,
+                  {
+                    backgroundColor: getButtonColor(button.type),
+                  },
+                  index > 0 && styles.buttonMargin
+                ]}
+                onPress={() => {
+                  button.onPress();
+                  onClose();
+                }}
+              >
+                <TextView style={styles.buttonText}>
+                  {button.text}
+                </TextView>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )
+      }
+    </View >
   );
 };
 
@@ -153,7 +166,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const showConfirmAlert = (
     message: string,
     buttons: AlertButton[],
-    type: AlertType = 'warning'
+    type: AlertType = 'info'
   ) => {
     setAlertState({
       visible: true,
@@ -171,6 +184,28 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }).start();
   };
 
+  // Add the showDeleteConfirmation function
+  const showDeleteConfirmation = (
+    message: string,
+    onConfirm: () => void,
+    onCancel?: () => void
+  ) => {
+    const buttons: AlertButton[] = [
+      {
+        text: 'Cancel',
+        onPress: onCancel || (() => { }),
+        type: 'cancel'
+      },
+      {
+        text: 'Delete',
+        onPress: onConfirm,
+        type: 'destructive'
+      }
+    ];
+
+    showConfirmAlert(message, buttons, 'info');
+  };
+
   const hideAlert = () => {
     Animated.timing(animation, {
       toValue: 0,
@@ -182,7 +217,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   return (
-    <AlertContext.Provider value={{ showAlert, showConfirmAlert }}>
+    <AlertContext.Provider value={{ showAlert, showConfirmAlert, showDeleteConfirmation }}>
       {children}
       {alertState.visible && (
         <Animated.View
@@ -230,18 +265,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'PoppinsMedium',
     textAlign: 'center',
-    marginBottom: 10,
   },
   buttonContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 10,
+    alignSelf: 'flex-end',
+    justifyContent: 'flex-end',
+    marginTop: 20,
   },
   button: {
     paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   buttonMargin: {
     marginLeft: 10,
@@ -249,6 +283,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontFamily: 'PoppinsMedium',
     fontSize: 14,
+    color: '#FFFFFF',
   }
 });
 
